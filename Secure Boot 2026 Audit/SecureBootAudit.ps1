@@ -11,8 +11,7 @@
 
 [CmdletBinding()]
 param(
-    [string] $ExpectedIdentifier = 'Windows UEFI CA 2023',
-    [switch] $ReturnExitCode = $true  # default true for Intune friendliness
+    [string] $ExpectedIdentifier = 'Windows UEFI CA 2023'
 )
 
 function Get-UEFIVariableBytes {
@@ -84,14 +83,8 @@ $success = ($certStatus -eq 'CERTS ACTIVE' -and $SecureBootEnabled -eq $true)
 
 if ($success) {
     Write-Output $line
+    exit 0
 } else {
-    Write-Error $line
+    Write-Output $line
+    exit 1
 }
-
-# Exit code for Intune (0 = success/compliant; 1 = non-compliant)
-if ($ReturnExitCode) {
-    $global:LASTEXITCODE = if ($success) { 0 } else { 1 }
-}
-
-# If running as a detection script, also return the line so pipelines can parse it if needed
-$line
