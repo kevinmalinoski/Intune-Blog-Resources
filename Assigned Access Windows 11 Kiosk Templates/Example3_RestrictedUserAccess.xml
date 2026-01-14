@@ -37,7 +37,7 @@
   <Configs>
     <Config>
       <AutoLogonAccount rs5:DisplayName="MALINOSKI Web Browser" />
-      <DefaultProfile Id="{EDB3036B-780D-487D-A375-69369D8A8F78}" />
+      <DefaultProfile Id="{9A2A490F-10F6-4764-974A-43B19E722C23}" />
     </Config>
   </Configs>
 </AssignedAccessConfiguration>
