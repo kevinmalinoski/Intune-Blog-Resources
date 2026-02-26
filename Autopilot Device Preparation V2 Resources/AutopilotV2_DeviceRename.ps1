@@ -24,7 +24,7 @@
 #>
 
 param(
-    [string]$Prefix = 'MALO-V2',
+    [string]$Prefix = 'MALO-V2-',
     [int]$MaxTotalLength = 15,
     [switch]$WhatIf,
     [switch]$ForceRestart,
