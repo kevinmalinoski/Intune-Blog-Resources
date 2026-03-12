@@ -5,41 +5,52 @@
 .DESCRIPTION
   - Verifies Secure Boot is enabled (uses Confirm-SecureBootUEFI if available).
   - Reads UEFI variables safely and searches for the certificate identifier.
-  - Outputs one of: SECUREBOOT_DISABLED, MISSING, ACTIVE, INACTIVE (and returns exit codes).
+  - Outputs one of: MISSING, ACTIVE, INACTIVE (and returns exit codes).
 
+.EXAMPLE
+  powershell -ExecutionPolicy Bypass -File .\securebootcertcheck_new.ps1
 #>
 
 [CmdletBinding()]
-param(
-    [string] $ExpectedIdentifier = 'Windows UEFI CA 2023'
-)
+param()
 
-function Get-UEFIVariableBytes {
-    param([string] $VarName)
-    try {
-        $entry = Get-SecureBootUEFI -Name $VarName -ErrorAction Stop
-        if (-not $entry -or -not $entry.Bytes) { return $null }
-        return $entry.Bytes
-    } catch { return $null }
-}
-
-function Bytes-ContainsText {
-    param([byte[]] $Bytes, [string] $Text)
-    $encodings = @(
-        [System.Text.Encoding]::UTF8,
-        [System.Text.Encoding]::Unicode,            # UTF-16 LE
-        [System.Text.Encoding]::BigEndianUnicode,   # UTF-16 BE
-        [System.Text.Encoding]::ASCII
+function Write-Log {
+    param(
+        [string] $Message,
+        [switch] $Problem
     )
-    foreach ($enc in $encodings) {
-        try {
-            $decoded = $enc.GetString($Bytes)
-            if ($decoded -and ($decoded -match [regex]::Escape($Text))) { return $true }
-        } catch {}
-    }
-    return $false
+    if ($Problem) { Write-Error $Message } else { Write-Output $Message }
 }
 
+function Is-RunningElevated {
+    try {
+        $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+        return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    } catch {
+        return $false
+    }
+}
+
+function Get-UEFIVariableText {
+    param(
+        [Parameter(Mandatory=$true)][string] $VarName
+    )
+    try {
+        $entry = Get-SecureBootUEFI $VarName -ErrorAction Stop
+        if (-not $entry -or -not $entry.bytes) { return $null }
+        # Prefer UTF8, fallback to ASCII
+        try { return [System.Text.Encoding]::UTF8.GetString($entry.bytes) } catch { return [System.Text.Encoding]::ASCII.GetString($entry.bytes) }
+    } catch {
+        return $null
+    }
+}
+
+# Warn if not elevated (Get-SecureBootUEFI usually requires elevation)
+if (-not (Is-RunningElevated)) {
+    Write-Warning "Script is not running elevated. Get-SecureBootUEFI may fail or return incomplete results."
+}
+
+# Determine Secure Boot status
 # Secure Boot state
 $SecureBootEnabled = $false
 $SecureBootStateKnown = $false
@@ -52,22 +63,6 @@ if (Get-Command Confirm-SecureBootUEFI -ErrorAction SilentlyContinue) {
     }
 }
 
-# UEFI db checks
-$dbDefaultBytes = Get-UEFIVariableBytes 'dbdefault'
-$dbBytes        = Get-UEFIVariableBytes 'db'
-
-$dbDefaultHasExpected = $dbDefaultBytes -and (Bytes-ContainsText $dbDefaultBytes $ExpectedIdentifier)
-$dbHasExpected        = $dbBytes -and (Bytes-ContainsText $dbBytes $ExpectedIdentifier)
-
-# Cert status
-if (-not $dbDefaultHasExpected) {
-    $certStatus = 'CERTS MISSING'
-} elseif (-not $dbHasExpected) {
-    $certStatus = 'CERTS INACTIVE'
-} else {
-    $certStatus = 'CERTS ACTIVE'
-}
-
 # Secure Boot wording
 $sbStatus = if ($SecureBootStateKnown) {
     if ($SecureBootEnabled) { 'Secure Boot Enabled' } else { 'Secure Boot Disabled' }
@@ -75,16 +70,17 @@ $sbStatus = if ($SecureBootStateKnown) {
     'Secure Boot Unknown'
 }
 
-# Compose single-line output
-$line = "$certStatus + $sbStatus"
+$dbText = Get-UEFIVariableText -VarName 'db'
+$expected = 'Windows UEFI CA 2023'
+$dbDefaultText = Get-UEFIVariableText -VarName 'dbdefault'
 
-# Log: success only when Secure Boot Enabled AND Certs Active; else report issue
-$success = ($certStatus -eq 'CERTS ACTIVE' -and $SecureBootEnabled -eq $true)
-
-if ($success) {
-    Write-Output $line
+if ($dbText -and $dbText -match [regex]::Escape($expected)) {
+    Write-Output "CERTS ACTIVE - $sbStatus"
     exit 0
-} else {
-    Write-Output $line
+}elseif (-not $dbDefaultText -or ($dbDefaultText -notmatch [regex]::Escape($expected))) {
+    Write-Output "CERTS MISSING - $sbStatus"
+    exit 1
+}else {
+    Write-Output "CERTS INACTIVE - $sbStatus"
     exit 1
 }
