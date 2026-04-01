@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<AssignedAccessConfiguration xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                             xmlns="http://schemas.microsoft.com/AssignedAccess/2017/config"
+                             xmlns:default="http://schemas.microsoft.com/AssignedAccess/2017/config" 
+                             xmlns:rs5="http://schemas.microsoft.com/AssignedAccess/201810/config"
+                             xmlns:v3="http://schemas.microsoft.com/AssignedAccess/2020/config"
+                             xmlns:v4="http://schemas.microsoft.com/AssignedAccess/2021/config"
+                             xmlns:v5="http://schemas.microsoft.com/AssignedAccess/2022/config">
+    <Profiles>
+        <Profile Id="{EDB3036B-780D-487D-A375-69369D8A8F78}">
+            <KioskModeApp v4:ClassicAppPath="%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" v4:ClassicAppArguments="--kiosk https://malinoski.me --edge-kiosk-type=public-browsing" />
+            <v4:BreakoutSequence Key="Ctrl+L" />
+        </Profile>
+        <Profile Id="{377435b7-eee7-4e17-80f8-3b8c7b929d13}">
+            <AllAppsList>
+                <AllowedApps>
+                    <App DesktopAppPath="%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" />
+                    <App DesktopAppPath="%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge_proxy.exe" />
+                    <App AppUserModelId="Microsoft.MicrosoftEdge.Stable_8wekyb3d8bbwe!App"/>
+                    <App AppUserModelId="windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel" /> 
+                    <App DesktopAppPath="C:\Windows\SystemApps\MicrosoftWindows.Client.CBS\_cw5n1h2txyewy\CrossDeviceResume.exe" />
+                    <App DesktopAppPath="%windir%\explorer.exe" />
+                </AllowedApps>
+            </AllAppsList>
+            <rs5:FileExplorerNamespaceRestrictions>
+                <rs5:AllowedNamespace Name="Downloads"/>
+            </rs5:FileExplorerNamespaceRestrictions>
+            <v5:StartPins>
+                <![CDATA[
+                    {
+                        "applyOnce":false, "pinnedList": [ 
+                            {"desktopAppLink": "%ALLUSERSPROFILE%\\Microsoft\\Windows\\Start Menu\\Programs\\Microsoft Edge.lnk"},
+                            {"desktopAppLink":"%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\File Explorer.lnk"},
+                            {"packagedAppId": "windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel"}
+                        ] 
+                    }
+                ]]>
+            </v5:StartPins>
+            <Taskbar ShowTaskbar="true" />
+            <v5:TaskbarLayout>
+                <![CDATA[
+                    <?xml version="1.0" encoding="utf-8"?>
+                    <LayoutModificationTemplate
+                        xmlns="http://schemas.microsoft.com/Start/2014/LayoutModification"
+                        xmlns:defaultlayout="http://schemas.microsoft.com/Start/2014/FullDefaultLayout"
+                        xmlns:start="http://schemas.microsoft.com/Start/2014/StartLayout"
+                        xmlns:taskbar="http://schemas.microsoft.com/Start/2014/TaskbarLayout"
+                        Version="1">
+                    <CustomTaskbarLayoutCollection PinListPlacement="Replace">
+                        <defaultlayout:TaskbarLayout>
+                        <taskbar:TaskbarPinList>
+                            <taskbar:DesktopApp DesktopApplicationLinkPath="%ALLUSERSPROFILE%\Microsoft\Windows\Start Menu\Programs\Microsoft Edge.lnk"/>
+                        </taskbar:TaskbarPinList>
+                        </defaultlayout:TaskbarLayout>
+                    </CustomTaskbarLayoutCollection>
+                    </LayoutModificationTemplate>
+                ]]>
+            </v5:TaskbarLayout>
+        </Profile>
+    </Profiles>
+    <Configs>
+        <Config>
+            <AutoLogonAccount rs5:DisplayName="Malinoski Kiosk Browser" />
+            <DefaultProfile Id="{EDB3036B-780D-487D-A375-69369D8A8F78}" />
+        </Config>
+        <Config>
+            <UserGroup Type="LocalGroup" Name="Users" />
+            <DefaultProfile Id="{377435b7-eee7-4e17-80f8-3b8c7b929d13}"/>
+        </Config>
+    </Configs>
+</AssignedAccessConfiguration>
