@@ -66,19 +66,55 @@ IntuneWinAppUtil.exe -c .\MCPR -s mcafeeremoval.ps1 -o .\output
 
 ### 2. Create the Win32 app
 
+**Program**
+
 | Setting | Value |
 |---|---|
 | Install command | `cmd.exe /c` |
 | Uninstall command | `powershell.exe -ExecutionPolicy Bypass -File .\mcafeeremoval.ps1` |
 | Install behavior | System |
-| Detection rule | Registry — key exists — `HKEY_LOCAL_MACHINE\SOFTWARE\McAfee` |
-| Assignment | **Uninstall** → All Devices |
+| Device restart behavior | Determine behavior based on return codes |
+
+**Detection rule**
+
+| Setting | Value |
+|---|---|
+| Rule type | Registry |
+| Key path | `HKEY_LOCAL_MACHINE\SOFTWARE\McAfee` |
+| Detection method | Key exists |
 
 The install command is a deliberate no-op. Detection targets **McAfee itself**, not the removal tool: the app is assigned as an *Uninstall*, so Intune runs the script and re-evaluates detection, and "not detected" is what marks it successful.
 
-### 3. Wait
+### 3. Assign as Uninstall
 
-Devices report back over the next 24–48 hours. Removal completes across one or two retry cycles with a reboot in between — see [Why it takes a reboot](#why-it-takes-a-reboot).
+Assign to **All devices**, mode **Included**.
+
+| Setting | Value |
+|---|---|
+| End user notifications | Show toast notifications for computer restarts |
+| Delivery optimization priority | Content download in background |
+| Time zone | UTC |
+| App availability | As soon as possible |
+| App installation deadline | As soon as possible |
+| Restart grace period | **Enabled** |
+| Device restart grace period | 10 minutes |
+| Restart countdown dialog | 1 minute before restart |
+| Allow user to snooze | Yes |
+| Snooze duration | 2 minutes |
+
+#### About the restart settings
+
+The reboot is not cosmetic — it is what completes the removal. MCPR stages locked files via `PendingFileRenameOperations` and Windows deletes them on restart, so a device that never reboots never finishes. See [Why it takes a reboot](#why-it-takes-a-reboot).
+
+Two things to understand before you copy these values:
+
+**The grace period only fires if something triggers a restart.** These assignment settings control *how the restart is presented* to the user; they do not cause one. With **Device restart behavior** set to *Determine behavior based on return codes*, Intune restarts the device when the app returns `3010` (soft reboot). This script returns `0` or `1`, so it does **not** request a restart itself — devices reboot on their normal cycle and Intune's retry finishes the job. If you want Intune to drive the restart directly, set **Device restart behavior** to *Intune will force a mandatory device restart* on the Program page.
+
+**The values above are lab values.** 10 minutes' grace with a 1 minute countdown and a 2 minute snooze is fine for testing and hostile in production — a user mid-meeting gets one minute's warning. For a fleet rollout, something like a 4 hour grace period, a 15 minute countdown and a 60 minute snooze is far less disruptive, and costs nothing given the removal completes on the next cycle either way.
+
+### 4. Wait
+
+Devices report back over the next 24–48 hours. Removal completes across one or two retry cycles with a reboot in between.
 
 ---
 
