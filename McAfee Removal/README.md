@@ -73,7 +73,7 @@ IntuneWinAppUtil.exe -c .\MCPR -s mcafeeremoval.ps1 -o .\output
 | Install command | `cmd.exe /c` |
 | Uninstall command | `powershell.exe -ExecutionPolicy Bypass -File .\mcafeeremoval.ps1` |
 | Install behavior | System |
-| Device restart behavior | Determine behavior based on return codes |
+| Device restart behavior | **Intune will force a mandatory device restart** |
 
 **Detection rule**
 
@@ -106,9 +106,11 @@ Assign to **All devices**, mode **Included**.
 
 The reboot is not cosmetic — it is what completes the removal. MCPR stages locked files via `PendingFileRenameOperations` and Windows deletes them on restart, so a device that never reboots never finishes. See [Why it takes a reboot](#why-it-takes-a-reboot).
 
-Two things to understand before you copy these values:
+**Let Intune force the restart.** Set **Device restart behavior** to *Intune will force a mandatory device restart* on the Program page. Intune then restarts the device after the uninstall runs regardless of exit code, and the grace period settings above control how that restart is presented — the toast, the countdown and the snooze.
 
-**The grace period only fires if something triggers a restart.** These assignment settings control *how the restart is presented* to the user; they do not cause one. With **Device restart behavior** set to *Determine behavior based on return codes*, Intune restarts the device when the app returns `3010` (soft reboot). This script returns `0` or `1`, so it does **not** request a restart itself — devices reboot on their normal cycle and Intune's retry finishes the job. If you want Intune to drive the restart directly, set **Device restart behavior** to *Intune will force a mandatory device restart* on the Program page.
+This is the configuration that works cleanly in practice. The device restarts once, `PendingFileRenameOperations` completes, and the next detection pass comes back clean. No second reboot required.
+
+The alternative — *Determine behavior based on return codes* — only restarts when the app returns `3010`. This script returns `0` or `1`, so it never requests a restart, and a device would sit with its removal half-staged until the user happened to reboot on their own.
 
 **The values above are lab values.** 10 minutes' grace with a 1 minute countdown and a 2 minute snooze is fine for testing and hostile in production — a user mid-meeting gets one minute's warning. For a fleet rollout, something like a 4 hour grace period, a 15 minute countdown and a 60 minute snooze is far less disruptive, and costs nothing given the removal completes on the next cycle either way.
 
@@ -137,7 +139,9 @@ FAIL   _RemoveSingleFileIgnoreCase::failed to remove ...\trsclean.dat
 PASS   ...\trsclean.dat is locked by user, delete on reboot
 ```
 
-`Error: 32` is a sharing violation; `Error: 5` is McAfee's driver denying access. Each `FAIL` is immediately recovered — the removal is deferred, not abandoned. This is why `Incomplete uninstallation` and a non-zero exit are **normal** on the first attempt, and why exit code 1 is the right answer: it tells Intune to retry after the reboot.
+`Error: 32` is a sharing violation; `Error: 5` is McAfee's driver denying access. Each `FAIL` is immediately recovered — the removal is deferred, not abandoned. This is why `Incomplete uninstallation` and a non-zero exit are **normal** on the first attempt.
+
+To be precise about what exit code 1 does: it marks the uninstall as **failed**, which makes Intune re-evaluate the assignment on a later cycle. It does **not** trigger a restart — that is controlled entirely by **Device restart behavior** on the Program page. The two work together: Intune forces the restart, Windows completes the staged deletions, and by the next evaluation detection comes back clean.
 
 The three passes exist because each one clears more than the last. Services running during pass 1 are gone by pass 2, releasing file handles so pass 3 can delete what was locked. A five second pause between passes gives handles time to close. The loop exits early on a clean result, so a healthy device still only pays for one pass.
 
@@ -148,7 +152,7 @@ McAfee documents none of these. Established by lab testing.
 | Script | Meaning |
 |---|---|
 | `0` | Every step completed without error |
-| `1` | At least one step reported an error — commonly "reboot required". Intune retries |
+| `1` | At least one step reported an error — commonly MCPR needing a reboot. Marks the uninstall failed, so Intune re-evaluates later. Does **not** itself trigger a restart |
 
 | `mccleanup.exe` | Meaning |
 |---|---|
