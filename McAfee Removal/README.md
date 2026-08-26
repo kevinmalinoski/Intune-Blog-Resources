@@ -41,15 +41,24 @@ The script logs the engine version before running it so you can confirm at a gla
 ## Repository contents
 
 ```
+McAfee Removal/
+├── mcafeeremoval.ps1        ← the removal script (v2.0)
+├── McAfeeDetectionScript.ps1 ← Intune detection rule
+├── MCPR-Source-Files.zip    ← McAfee's MCPR package, legacy engine included
+└── README.md
+```
+
+Extract `MCPR-Source-Files.zip` and drop `mcafeeremoval.ps1` in beside `mccleanup.exe`. The extracted folder contains the engine, `master.ini`, and 45 product module folders:
+
+```
 MCPR/
-├── mcafeeremoval.ps1     ← the removal script (v2.0)
+├── mcafeeremoval.ps1     ← copy this in
 ├── mccleanup.exe         ← legacy MCPR engine, 10.4.123.0
 ├── McClnUI.exe           ← McAfee's GUI launcher (unused, ships with MCPR)
 ├── mccertupd.exe
 ├── master.ini            ← declares the product modules
 ├── StartCleanup.bat      ← McAfee's own launcher, for reference
 └── <45 module folders>   ← VS, MPS, MSK, WPS, RESIDUE, …
-McAfeeDetectionScript.ps1 ← optional; a registry rule is simpler (see below)
 ```
 
 Everything except `mcafeeremoval.ps1` and `McAfeeDetectionScript.ps1` is McAfee's MCPR package, unmodified.
@@ -60,9 +69,13 @@ Everything except `mcafeeremoval.ps1` and `McAfeeDetectionScript.ps1` is McAfee'
 
 ### 1. Package
 
+Extract `MCPR-Source-Files.zip`, copy `mcafeeremoval.ps1` into the extracted `MCPR` folder, then:
+
 ```powershell
 IntuneWinAppUtil.exe -c .\MCPR -s mcafeeremoval.ps1 -o .\output
 ```
+
+`McAfeeDetectionScript.ps1` is uploaded separately in the Intune portal — it is not part of the package.
 
 ### 2. Create the Win32 app
 
@@ -79,11 +92,26 @@ IntuneWinAppUtil.exe -c .\MCPR -s mcafeeremoval.ps1 -o .\output
 
 | Setting | Value |
 |---|---|
-| Rule type | Registry |
-| Key path | `HKEY_LOCAL_MACHINE\SOFTWARE\McAfee` |
-| Detection method | Key exists |
+| Rule format | Use a custom detection script |
+| Script file | `McAfeeDetectionScript.ps1` |
+| Run script as 32-bit process | No |
+| Enforce script signature check | No |
 
-The install command is a deliberate no-op. Detection targets **McAfee itself**, not the removal tool: the app is assigned as an *Uninstall*, so Intune runs the script and re-evaluates detection, and "not detected" is what marks it successful.
+The install command is a deliberate no-op. Detection targets **McAfee itself**, not the removal tool: the app is assigned as an *Uninstall*, so Intune runs the removal script and re-evaluates detection, and "not detected" is what marks it successful.
+
+#### Why a script instead of a single registry rule
+
+A registry rule can test one key. `McAfeeDetectionScript.ps1` tests **three keys across both registry views** — six checks in total:
+
+| Key | Why |
+|---|---|
+| `SOFTWARE\McAfee` | The parent key. Present for nearly every McAfee product |
+| `SOFTWARE\McAfee\WebAdvisor` | MCPR's MSAD module never removes this explicitly — it only disappears as collateral when the parent key goes |
+| `SOFTWARE\McAfee Safe Connect` | Sits outside the `McAfee` parent key entirely, so a parent-key rule misses it |
+
+Each is checked in the **64-bit and 32-bit (WOW6432Node)** views explicitly, using `OpenBaseKey` with an explicit `RegistryView` rather than the `HKLM:` drive. That matters: the Intune Management Extension is a 32-bit process, so a detection script can be launched in the 32-bit PowerShell host where `HKLM:\SOFTWARE\McAfee` is silently redirected to `HKLM:\SOFTWARE\Wow6432Node\McAfee`. Reading both views explicitly removes that ambiguity regardless of host bitness.
+
+**Any one key present → detected → McAfee is still installed.** All six absent → not detected → the uninstall succeeded. The script also treats an *unreadable* key as present, so a permission-locked remnant cannot be mistaken for a clean device.
 
 ### 3. Assign as Uninstall
 
